@@ -1,12 +1,12 @@
 {
   "name": "meu-proxy-escolar",
   "version": "1.0.0",
-  "description": "Web Proxy para a escola",
+  "description": "Web Proxy Corrosion para a escola",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "http-proxy": "^1.18.1"
+    "corrosion": "^1.1.0"
   }
 }
