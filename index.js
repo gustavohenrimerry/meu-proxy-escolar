@@ -1,14 +1,16 @@
 const express = require('express');
 const { createServer } = require('http');
-const createBareServer = require('@tomphttp/bare-server-node');
+const bareServerNode = require('@tomphttp/bare-server-node');
 
 const app = express();
 const server = createServer();
-const bareServer = createBareServer('/bare/');
+
+// CORRIGIDO: Agora chamamos a função correta do objeto exportado
+const bareServer = bareServerNode.createBareServer('/bare/');
 
 const PORT = process.env.PORT || 8080;
 
-// Página Inicial com um navegador embutido funcional (via iframe camuflado)
+// Página Inicial com o navegador embutido (via iframe camuflado)
 app.get('/', (req, res) => {
     res.send(`
         <!DOCTYPE html>
@@ -27,7 +29,7 @@ app.get('/', (req, res) => {
         </head>
         <body>
             <div class="nav-bar">
-                <input type="text" id="url" placeholder="Digite o site (ex: tiktok.com ou google.com)" value="https://www.tiktok.com">
+                <input type="text" id="url" placeholder="Digite o site (ex: tiktok.com)" value="https://www.tiktok.com">
                 <button onclick="carregar()">Navegar</button>
             </div>
             <iframe id="navegador" src="about:blank"></iframe>
@@ -39,10 +41,9 @@ app.get('/', (req, res) => {
                     if (!url.startsWith('http://') && !url.startsWith('https://')) {
                         url = 'https://' + url;
                     }
-                    // Usa um decodificador público de Ultraviolet/Bare para renderizar o site de forma limpa
+                    // Usa o decodificador público de Ultraviolet para abrir o site sem travar
                     document.getElementById('navegador').src = "https://nullproxy.com/proxy?url=" + encodeURIComponent(url);
                 }
-                // Carrega o TikTok automaticamente ao abrir
                 window.onload = carregar;
             </script>
         </body>
@@ -50,7 +51,7 @@ app.get('/', (req, res) => {
     `);
 });
 
-// Vincula o servidor Express e o Bare Server juntos
+// Vincula as requisições normais e do Bare Server juntas
 server.on('request', (req, res) => {
     if (bareServer.shouldRoute(req)) {
         bareServer.route(req, res);
@@ -68,5 +69,5 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Proxy profissional rodando na porta ${PORT}`);
+    console.log(`Proxy profissional online na porta ${PORT}`);
 });
