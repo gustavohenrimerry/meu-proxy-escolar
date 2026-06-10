@@ -46,7 +46,7 @@ app.get('/', (req, res) => {
     `);
 });
 
-// O Motor do Proxy: Ele intercepta o caminho /go/site-solicitado e faz a ponte
+// O Motor do Proxy: Intercepta o caminho /go/site e faz a ponte
 app.use('/go/:target*', (req, res, next) => {
     const targetUrl = 'https://' + req.params.target + (req.params[0] || '');
     
@@ -54,13 +54,15 @@ app.use('/go/:target*', (req, res, next) => {
         target: targetUrl,
         changeOrigin: true,
         pathFilter: (path) => path.startsWith('/go'),
-        pathRewrite: (path, req) => {
-            // Remove o prefixo /go/site do caminho original antes de mandar para o site de destino
-            return path.replace(/^\\/go\\/[^\\/]+/, '');
+        pathRewrite: (path) => {
+            // CORRIGIDO: Expressão regular limpa para remover o prefixo sem travar o Node
+            return path.replace(/^\/go\/[^\/]+/, '');
         },
         onError: (err, req, res) => {
             console.error('Erro ao acessar:', targetUrl, err.message);
-            res.status(502).send('Erro ao carregar o site. Verifique se digitou o endereço corretamente.');
+            if (!res.headersSent) {
+                res.status(502).send('Erro ao carregar o site. Verifique se digitou o endereço corretamente.');
+            }
         }
     })(req, res, next);
 });
