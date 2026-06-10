@@ -1,13 +1,13 @@
 {
   "name": "meu-proxy-escolar",
-  "version": "2.0.0",
-  "description": "Proxy Ultraviolet Profissional",
+  "version": "3.0.0",
+  "description": "Proxy Escolar Próprio Sem Terceiros",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "express": "^4.19.2",
-    "@tomphttp/bare-server-node": "^2.0.1"
+    "corrosion": "1.0.0"
   }
 }
