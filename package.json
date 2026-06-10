@@ -1,14 +1,14 @@
 {
   "name": "meu-proxy-escolar",
-  "version": "1.0.0",
-  "description": "Web Proxy Escolar com Reescrevedor de Links",
+  "version": "2.0.0",
+  "description": "Proxy Ultraviolet Profissional",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "express": "^4.19.2",
-    "axios": "^1.7.2",
-    "cheerio": "^1.0.0-rc.12"
+    "@tomphttp/bare-server-node": "^2.0.1",
+    "http-proxy-handler": "^1.0.0"
   }
 }

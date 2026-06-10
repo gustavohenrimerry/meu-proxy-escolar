@@ -1,97 +1,72 @@
 const express = require('express');
-const axios = require('axios');
-const cheerio = require('cheerio');
+const { createServer } = require('http');
+const createBareServer = require('@tomphttp/bare-server-node');
 
 const app = express();
+const server = createServer();
+const bareServer = createBareServer('/bare/');
+
 const PORT = process.env.PORT || 8080;
 
-// Página Inicial do seu Web Proxy
+// Página Inicial com um navegador embutido funcional (via iframe camuflado)
 app.get('/', (req, res) => {
     res.send(`
         <!DOCTYPE html>
         <html lang="pt-BR">
         <head>
             <meta charset="UTF-8">
-            <title>Navegador Escolar Livre</title>
+            <title>Navegador Escolar</title>
             <style>
-                body { font-family: Arial, sans-serif; background: #1a1a1a; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-                h1 { color: #ff5722; font-size: 32px; margin-bottom: 20px; }
-                .box { background: #2a2a2a; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); text-align: center; }
-                input { width: 350px; padding: 12px; border: none; border-radius: 4px; font-size: 16px; margin-bottom: 15px; display: block; margin-left: auto; margin-right: auto; }
-                button { padding: 12px 30px; background: #ff5722; border: none; color: white; border-radius: 4px; font-size: 16px; cursor: pointer; font-weight: bold; width: 100%; }
+                html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #111; font-family: Arial, sans-serif; overflow: hidden; }
+                .nav-bar { background: #222; padding: 10px; display: flex; gap: 10px; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+                input { flex: 1; padding: 10px; border: none; border-radius: 4px; background: #333; color: white; font-size: 14px; }
+                button { padding: 10px 20px; background: #ff5722; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
                 button:hover { background: #e0481d; }
+                iframe { width: 100%; height: calc(100% - 55px); border: none; background: white; }
             </style>
         </head>
         <body>
-            <div class="box">
-                <h1>Proxy Escolar Unblocker</h1>
-                <input type="text" id="url-input" placeholder="Exemplo: google.com" required>
-                <button onclick="navegar()">Acessar Site</button>
+            <div class="nav-bar">
+                <input type="text" id="url" placeholder="Digite o site (ex: tiktok.com ou google.com)" value="https://www.tiktok.com">
+                <button onclick="carregar()">Navegar</button>
             </div>
+            <iframe id="navegador" src="about:blank"></iframe>
+
             <script>
-                function navegar() {
-                    let url = document.getElementById('url-input').value.trim();
+                function carregar() {
+                    let url = document.getElementById('url').value.trim();
                     if (!url) return;
-                    url = url.replace(/^https?:\\/\\//, '');
-                    window.location.href = window.location.origin + '/go?url=' + encodeURIComponent('https://' + url);
+                    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                        url = 'https://' + url;
+                    }
+                    // Usa um decodificador público de Ultraviolet/Bare para renderizar o site de forma limpa
+                    document.getElementById('navegador').src = "https://nullproxy.com/proxy?url=" + encodeURIComponent(url);
                 }
-                document.getElementById('url-input').addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter') navegar();
-                });
+                // Carrega o TikTok automaticamente ao abrir
+                window.onload = carregar;
             </script>
         </body>
         </html>
     `);
 });
 
-// O Motor do Proxy com Reescrevedor de Links
-app.get('/go', async (req, res) => {
-    const targetUrl = req.query.url;
-    
-    if (!targetUrl) {
-        return res.redirect('/');
-    }
-
-    try {
-        // Faz a requisição ao site original fingindo ser um navegador comum
-        const response = await axios.get(targetUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            },
-            responseType: 'text'
-        });
-
-        const $ = cheerio.load(response.data);
-        const urlObj = new URL(targetUrl);
-        const baseUrl = urlObj.origin;
-
-        // Função mágica: Modifica os links (href e src) para continuarem passando pela Render
-        $('a, link, script, img, form').each((i, el) => {
-            const href = $(el).attr('href');
-            const src = $(el).attr('src');
-            const action = $(el).attr('action');
-
-            if (href && !href.startsWith('javascript:') && !href.startsWith('#')) {
-                const absoluteUrl = href.startsWith('http') ? href : new URL(href, baseUrl).href;
-                $(el).attr('href', `/go?url=${encodeURIComponent(absoluteUrl)}`);
-            }
-            if (src) {
-                const absoluteSrc = src.startsWith('http') ? src : new URL(src, baseUrl).href;
-                $(el).attr('src', `/go?url=${encodeURIComponent(absoluteSrc)}`);
-            }
-            if (action) {
-                const absoluteAction = action.startsWith('http') ? action : new URL(action, baseUrl).href;
-                $(el).attr('action', `/go?url=${encodeURIComponent(absoluteAction)}`);
-            }
-        });
-
-        res.send($.html());
-    } catch (err) {
-        console.error('Erro ao processar a página:', err.message);
-        res.status(502).send('Não foi possível carregar este site através do proxy. Alguns sites modernos (como o Google) possuem travas rígidas de segurança que bloqueiam proxies simples.');
+// Vincula o servidor Express e o Bare Server juntos
+server.on('request', (req, res) => {
+    if (bareServer.shouldRoute(req)) {
+        bareServer.route(req, res);
+    } else {
+        app(req, res);
     }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Servidor rodando na porta ${PORT}`);
+server.on('upgrade', (req, socket, head) => {
+    if (bareServer.shouldRoute(req)) {
+        bareServer.routeUpgrade(req, socket, head);
+    } else {
+        socket.end();
+    }
+});
+
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Proxy profissional rodando na porta ${PORT}`);
 });
