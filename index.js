@@ -1,18 +1,10 @@
 const express = require('express');
-const http = require('http');
-const Corrosion = require('corrosion');
+const axios = require('axios');
 
 const app = express();
-const server = http.createServer(app);
 const PORT = process.env.PORT || 8080;
 
-// Inicializa o motor do proxy no caminho /search/
-const proxy = new Corrosion({
-    prefix: '/search/',
-    codec: 'xor' // Camufla a URL para passar pelo filtro da escola
-});
-
-// Página Inicial do seu Servidor
+// Página Inicial do seu Proxy
 app.get('/', (req, res) => {
     res.send(`
         <!DOCTYPE html>
@@ -39,11 +31,10 @@ app.get('/', (req, res) => {
                 function navegar() {
                     let url = document.getElementById('url').value.trim();
                     if (!url) return;
-                    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-                        url = 'https://' + url;
-                    }
-                    // Transforma a URL em um link camuflado que o seu servidor entende
-                    window.location.href = window.location.origin + '/search/' + btoa(url);
+                    // Remove protocolos digitados para evitar duplicação
+                    url = url.replace(/^https?:\\/\\//, '');
+                    // Envia para a rota de navegação
+                    window.location.href = window.location.origin + '/browse/' + url;
                 }
                 document.getElementById('url').addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') navegar();
@@ -54,16 +45,36 @@ app.get('/', (req, res) => {
     `);
 });
 
-// Faz o Express passar todas as requisições de sites para o motor do proxy
-app.use((req, res) => {
-    proxy.request(req, res);
+// Rota de Navegação Nativa: Carrega o site solicitado diretamente
+app.get('/browse/:target*', async (req, res) => {
+    const targetSite = req.params.target + (req.params[0] || '');
+    
+    if (!targetSite) {
+        return res.redirect('/');
+    }
+
+    const targetUrl = 'https://' + targetSite;
+
+    try {
+        // Descarrega o site simulando um navegador comum para evitar bloqueios
+        const response = await axios.get(targetUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            responseType: 'text',
+            validateStatus: () => true // Evita que erros 403/404 quebrem o servidor Node
+        });
+
+        // Altera o tipo de conteúdo para o navegador ler corretamente (HTML)
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.send(response.data);
+
+    } catch (err) {
+        console.error('Erro na ligação:', err.message);
+        res.status(502).send('Não foi possível estabelecer ligação com o site através do proxy.');
+    }
 });
 
-// Ativa suporte a vídeos e recursos pesados (WebSockets)
-server.on('upgrade', (req, socket, head) => {
-    proxy.upgrade(req, socket, head);
-});
-
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Servidor rodando na porta ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Servidor a rodar na porta ${PORT}`);
 });

@@ -1,13 +1,13 @@
 {
   "name": "meu-proxy-escolar",
-  "version": "3.0.0",
-  "description": "Proxy Escolar Próprio Sem Terceiros",
+  "version": "4.0.0",
+  "description": "Proxy Escolar Nativo",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "express": "^4.19.2",
-    "corrosion": "1.0.0"
+    "axios": "^1.7.2"
   }
 }
