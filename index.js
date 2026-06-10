@@ -1,5 +1,6 @@
 const express = require('express');
-const { createProxyMiddleware } = require('http-proxy-middleware');
+const axios = require('axios');
+const cheerio = require('cheerio');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -31,9 +32,8 @@ app.get('/', (req, res) => {
                 function navegar() {
                     let url = document.getElementById('url-input').value.trim();
                     if (!url) return;
-                    // Limpa o protocolo digitado para evitar conflitos na URL do proxy
                     url = url.replace(/^https?:\\/\\//, '');
-                    window.location.href = window.location.origin + '/go/' + url;
+                    window.location.href = window.location.origin + '/go?url=' + encodeURIComponent('https://' + url);
                 }
                 document.getElementById('url-input').addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') navegar();
@@ -44,34 +44,54 @@ app.get('/', (req, res) => {
     `);
 });
 
-// CORRIGIDO: Captura de rota dinâmica usando o caractere curinga do Express de forma nativa
-app.use('/go/*', (req, res, next) => {
-    // Pega tudo o que vem depois de /go/ de forma bruta
-    const targetPath = req.params[0];
-
-    if (!targetPath) {
-        return res.status(400).send('Por favor, digite um site valido na pagina inicial.');
+// O Motor do Proxy com Reescrevedor de Links
+app.get('/go', async (req, res) => {
+    const targetUrl = req.query.url;
+    
+    if (!targetUrl) {
+        return res.redirect('/');
     }
 
-    const targetUrl = 'https://' + targetPath;
+    try {
+        // Faz a requisição ao site original fingindo ser um navegador comum
+        const response = await axios.get(targetUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            responseType: 'text'
+        });
 
-    createProxyMiddleware({
-        target: targetUrl,
-        changeOrigin: true,
-        secure: false, // Ignora erros de SSL do site de destino
-        pathRewrite: (path) => {
-            // Remove o prefixo /go/ para o site alvo receber a requisição limpa
-            return path.replace(/^\/go\/[^\/]+/, '');
-        },
-        onError: (err, req, res) => {
-            console.error('Erro no proxy ao acessar:', targetUrl);
-            if (!res.headersSent) {
-                res.status(502).send('Nao foi possivel carregar o site. Tente digitar outro link.');
+        const $ = cheerio.load(response.data);
+        const urlObj = new URL(targetUrl);
+        const baseUrl = urlObj.origin;
+
+        // Função mágica: Modifica os links (href e src) para continuarem passando pela Render
+        $('a, link, script, img, form').each((i, el) => {
+            const href = $(el).attr('href');
+            const src = $(el).attr('src');
+            const action = $(el).attr('action');
+
+            if (href && !href.startsWith('javascript:') && !href.startsWith('#')) {
+                const absoluteUrl = href.startsWith('http') ? href : new URL(href, baseUrl).href;
+                $(el).attr('href', `/go?url=${encodeURIComponent(absoluteUrl)}`);
             }
-        }
-    })(req, res, next);
+            if (src) {
+                const absoluteSrc = src.startsWith('http') ? src : new URL(src, baseUrl).href;
+                $(el).attr('src', `/go?url=${encodeURIComponent(absoluteSrc)}`);
+            }
+            if (action) {
+                const absoluteAction = action.startsWith('http') ? action : new URL(action, baseUrl).href;
+                $(el).attr('action', `/go?url=${encodeURIComponent(absoluteAction)}`);
+            }
+        });
+
+        res.send($.html());
+    } catch (err) {
+        console.error('Erro ao processar a página:', err.message);
+        res.status(502).send('Não foi possível carregar este site através do proxy. Alguns sites modernos (como o Google) possuem travas rígidas de segurança que bloqueiam proxies simples.');
+    }
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Servidor rodando e pronto na porta ${PORT}`);
+    console.log(`Servidor rodando na porta ${PORT}`);
 });
