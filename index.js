@@ -31,12 +31,10 @@ app.get('/', (req, res) => {
                 function navegar() {
                     let url = document.getElementById('url-input').value.trim();
                     if (!url) return;
-                    // Remove o http:// ou https:// se o usuário digitar para não duplicar
+                    // Limpa o protocolo digitado para evitar conflitos na URL do proxy
                     url = url.replace(/^https?:\\/\\//, '');
-                    // Redireciona para o sistema de proxy do servidor
                     window.location.href = window.location.origin + '/go/' + url;
                 }
-                // Permite apertar Enter para buscar
                 document.getElementById('url-input').addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') navegar();
                 });
@@ -46,22 +44,29 @@ app.get('/', (req, res) => {
     `);
 });
 
-// O Motor do Proxy: Intercepta o caminho /go/site e faz a ponte
-app.use('/go/:target*', (req, res, next) => {
-    const targetUrl = 'https://' + req.params.target + (req.params[0] || '');
-    
+// CORRIGIDO: Captura de rota dinâmica usando o caractere curinga do Express de forma nativa
+app.use('/go/*', (req, res, next) => {
+    // Pega tudo o que vem depois de /go/ de forma bruta
+    const targetPath = req.params[0];
+
+    if (!targetPath) {
+        return res.status(400).send('Por favor, digite um site valido na pagina inicial.');
+    }
+
+    const targetUrl = 'https://' + targetPath;
+
     createProxyMiddleware({
         target: targetUrl,
         changeOrigin: true,
-        pathFilter: (path) => path.startsWith('/go'),
+        secure: false, // Ignora erros de SSL do site de destino
         pathRewrite: (path) => {
-            // CORRIGIDO: Expressão regular limpa para remover o prefixo sem travar o Node
+            // Remove o prefixo /go/ para o site alvo receber a requisição limpa
             return path.replace(/^\/go\/[^\/]+/, '');
         },
         onError: (err, req, res) => {
-            console.error('Erro ao acessar:', targetUrl, err.message);
+            console.error('Erro no proxy ao acessar:', targetUrl);
             if (!res.headersSent) {
-                res.status(502).send('Erro ao carregar o site. Verifique se digitou o endereço corretamente.');
+                res.status(502).send('Nao foi possivel carregar o site. Tente digitar outro link.');
             }
         }
     })(req, res, next);
